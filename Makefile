@@ -5,7 +5,7 @@
 # build your proxy from sources.
 
 CC = gcc
-CFLAGS = -g -Wall
+CFLAGS = -g -Wall -O0
 LDFLAGS = -lpthread
 
 all: proxy
@@ -19,11 +19,22 @@ proxy.o: proxy.c csapp.h
 proxy: proxy.o csapp.o
 	$(CC) $(CFLAGS) proxy.o csapp.o -o proxy $(LDFLAGS)
 
+echoclient.o: echoclient.c csapp.h
+
+echoserveri.o: echoserveri.c csapp.h
+
+echoclient: echoclient.o csapp.o
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+
+echoserveri: echoserveri.o csapp.o
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+
 # Creates a tarball in ../proxylab-handin.tar that you can then
 # hand in. DO NOT MODIFY THIS!
 handin:
 	(make clean; cd ..; tar cvf $(USER)-proxylab-handin.tar proxylab-handout --exclude tiny --exclude nop-server.py --exclude proxy --exclude driver.sh --exclude port-for-user.pl --exclude free-port.sh --exclude ".*")
 
 clean:
-	rm -f *~ *.o proxy core *.tar *.zip *.gzip *.bzip *.gz
+	rm -f *~ *.o echoclient echoserveri proxy core *.tar *.zip *.gzip *.bzip *.gz
 
+	
