@@ -8,7 +8,7 @@ CC = gcc
 CFLAGS = -g -Wall -O0
 LDFLAGS = -lpthread
 
-all: proxy
+all: proxy echoclient echoserveri
 
 csapp.o: csapp.c csapp.h
 	$(CC) $(CFLAGS) -c csapp.c
