@@ -1,11 +1,13 @@
 /* $begin tinymain */
 /*
- * tiny.c - A simple, iterative HTTP/1.0 Web server that uses the
+ * # 11.6. Putting It Together: The `TINY` Web Server
+ *
+ * A simple, iterative HTTP/1.0 Web server that uses the
  *     GET method to serve static and dynamic content.
  *
- * Updated 11/2019 droh
- *   - Fixed sprintf() aliasing issue in serve_static(), and clienterror().
  */
+#include <strings.h>
+
 #include "csapp.h"
 
 void doit(int fd);
@@ -40,4 +42,181 @@ int main(int argc, char **argv) {
     doit(connfd);   // line:netp:tiny:doit
     Close(connfd);  // line:netp:tiny:close
   }
+}
+
+void doit(int fd) {
+  int is_static;
+  struct stat sbuf;
+  char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+  char filename[MAXLINE], cgiargs[MAXLINE];
+  rio_t rio;
+
+  // Read request line and headers
+  Rio_readinitb(&rio, fd);
+  Rio_readlineb(&rio, buf, MAXLINE);
+  printf("Request headers: \n");
+  printf("%s", buf);
+  sscanf(buf, "%s %s %s", method, uri, version);
+  if (strcasecmp(method, "GET")) {
+    clienterror(fd, method, "501", "Not Implemented",
+                "Tiny does not implement this method");
+    return;
+  }
+
+  read_requesthdrs(&rio);
+
+  // Parse URI from GET request
+  is_static = parse_uri(uri, filename, cgiargs);
+  if (stat(filename, &sbuf) < 0) {
+    clienterror(fd, filename, "404", "Not Found",
+                "Tiny couldn't find this file");
+    return;
+  }
+
+  if (is_static) {
+    // Serve static content
+    if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
+      clienterror(fd, filename, "403", "Forbidden",
+                  "Tiny couldn't read the file");
+      return;
+    }
+    serve_static(fd, filename, sbuf.st_size);
+  } else {
+    // Serve dynamic content
+    if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
+      clienterror(fd, filename, "403", "Forbidden",
+                  "Tiny couldn't run the CGI program 😢");
+      return;
+    }
+    serve_dynamic(fd, filename, cgiargs);
+  }
+}
+
+/// @brief Tiny does not use any of the information in the request headers.
+void read_requesthdrs(rio_t *rp) {
+  char buf[MAXLINE];
+
+  Rio_readlineb(rp, buf, MAXLINE);
+  while (strcmp(buf, "\r\n")) {
+    Rio_readlineb(rp, buf, MAXLINE);
+    printf("%s", buf);
+  }
+  return;
+}
+
+/// @brief Tiny assumes that the home directory for static content is its
+/// current directory and that the home directory for executable is `./cgi-bin`.
+/// @param uri
+/// @param filename regard as dynamic file as filename contains `/cgi-bin`
+/// prefix
+/// @param cgiargs only used with CGI program
+/// @return
+int parse_uri(char *uri, char *filename, char *cgiargs) {
+  char *ptr;
+
+  if (!strstr(uri, "cgi-bin")) {
+    // Static content
+    strcpy(cgiargs, "");
+    strcpy(filename, ".");
+    strcat(filename, uri);
+    if (uri[strlen(uri) - 1] == '/') {
+      strcat(filename, "home.html");
+    }
+    return 1;
+  } else {
+    // Dynamic content
+    ptr = index(uri, '?');
+    if (ptr) {
+      strcpy(cgiargs, ptr + 1);
+      *ptr = '\0';
+    } else {
+      strcpy(cgiargs, "");
+    }
+    strcpy(filename, ".");
+    strcat(filename, uri);
+    return 0;
+  }
+}
+
+void serve_static(int fd, char *filename, int filesize) {
+  int srcfd;
+  char *srcp, filetype[MAXLINE], buf[MAXBUF];
+
+  // Send response headers to client
+  get_filetype(filename, filetype);
+  sprintf(buf, "HTTP/1.0 200 OK\r\n");
+  sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
+  sprintf(buf, "%sConnection: close\r\n", buf);
+  sprintf(buf, "%sContent-Length: %d\r\n", buf, filesize);
+  sprintf(buf, "%sContent-Type: %s\r\n\r\n", buf, filetype);
+
+  Rio_writen(fd, buf, strlen(buf));
+  printf("Response headers: \n");
+  printf("%s", buf);
+
+  // Send response body to client
+  srcfd = Open(filename, O_RDONLY, 0);
+  srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
+  Close(srcfd);
+  Rio_writen(fd, srcp, filesize);
+  Munmap(srcp, filesize);
+}
+
+/// @brief Derive file type from filename
+void get_filetype(char *filename, char *filetype_out) {
+  if (strstr(filename, ".html"))
+    strcpy(filetype_out, "text/html");
+  else if (strstr(filename, ".gif"))
+    strcpy(filetype_out, "image/gif");
+  else if (strstr(filename, ".png"))
+    strcpy(filetype_out, "image/png");
+  else if (strstr(filename, ".jpg"))
+    strcpy(filetype_out, "image/jpeg");
+  else
+    strcpy(filetype_out, "text/plain");
+}
+
+void serve_dynamic(int fd, char *filename, char *cgiargs) {
+  char buf[MAXLINE], *emptylist[] = {NULL};
+
+  // Return first part of HTTP response
+  sprintf(buf, "HTTP/1.0 200 OK\r\n");
+  Rio_writen(fd, buf, strlen(buf));
+  sprintf(buf, "Server: Tiny Web Server\r\n");
+  Rio_writen(fd, buf, strlen(buf));
+
+  if (Fork() == 0) {
+    // Child Process
+    // Real server would set all CGI vars here!!
+    setenv("QUERY_STRING", cgiargs, 1);
+    Dup2(fd, STDOUT_FILENO);               // Redirect stdout to client!!!
+    Execve(filename, emptylist, environ);  // Run CGI program
+  }
+  // Parent waits for and reaps child
+  Wait(NULL);
+}
+
+void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
+                 char *longmsg) {
+  char buf[MAXLINE], body[MAXBUF];
+
+  // Build the HTTP response body
+  sprintf(body, "<html><title>Tiny Error</title>");
+  sprintf(body,
+          "%s<body bgcolor="
+          "ff1111"
+          ">\r\n",
+          body);
+  sprintf(body, "%s%s: %s\r\n", body, errnum, shortmsg);
+  sprintf(body, "%s<p>%s: %s\r\n", body, longmsg, cause);
+  sprintf(body, "%s<hr><em>The Tiny Web server</em>\r\n", body);
+
+  // Print the HTTP response
+  sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, shortmsg);
+  Rio_writen(fd, buf, strlen(buf));
+  sprintf(buf, "Content-Type: text/html\r\n");
+  Rio_writen(fd, buf, strlen(buf));
+  sprintf(buf, "Content-Length: %d\r\n\r\n", (int)strlen(body));
+  Rio_writen(fd, buf, strlen(buf));
+  Rio_writen(fd, body, strlen(body));
 }
