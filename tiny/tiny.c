@@ -172,6 +172,8 @@ void get_filetype(char *filename, char *filetype_out) {
     strcpy(filetype_out, "image/png");
   else if (strstr(filename, ".jpg"))
     strcpy(filetype_out, "image/jpeg");
+  else if (strstr(filename, ".mp4"))
+    strcpy(filetype_out, "video/mp4");
   else
     strcpy(filetype_out, "text/plain");
 }
