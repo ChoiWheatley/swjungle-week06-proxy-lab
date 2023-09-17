@@ -65,3 +65,4 @@ echoclient
 .gitignore
 echoserveri
 hex2dd
+dd2hex
