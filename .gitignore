@@ -61,3 +61,7 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+echoclient
+.gitignore
+echoserveri
+hex2dd
