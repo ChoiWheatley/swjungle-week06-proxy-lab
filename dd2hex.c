@@ -1,13 +1,13 @@
 /**
- * CSAPP Practice Problem 11.2
+ * CSAPP Practice Problem 11.3
  *
- * Write a program `hex2dd.c` that converts its 16-bit hex argument to a 16-bit
- * network byte order and prints the result.
+ * Write a program `dd2hex.c` that converts its 16-bit network byte order to a
+ * 16-bit hex number and prints the result.
  *
  * For example,
  * ```shell
- * linux> ./hex2dd 0x400
- * 1024
+ * linux> ./dd2hex 1024
+ * 0x400
  * ```
  */
 
@@ -18,23 +18,22 @@
 #include "csapp.h"
 
 int main(int argc, char const *argv[]) {
-  struct in_addr inaddr;
   uint16_t addr;
+  struct in_addr inaddr;
   char buf[MAXBUF];
 
   if (argc != 2) {
-    fprintf(stderr, "usage: %s <hex>\n", argv[0]);
+    fprintf(stderr, "usage: %s <dec>\n", argv[0]);
     exit(EXIT_FAILURE);
   }
 
-  sscanf(argv[1], "%hx", &addr);
-  inaddr.s_addr = htons(addr);
-
+  sscanf(argv[1], "%hd", &addr);
+  inaddr.s_addr = ntohs(addr);
   if (!inet_ntop(AF_INET, &inaddr, buf, MAXBUF)) {
     unix_error("inet_ntop error");
     exit(EXIT_FAILURE);
   }
-  printf("%d (%s)\n", inaddr.s_addr, buf);
+  printf("0x%x (%s)\n", inaddr.s_addr, buf);
 
   return 0;
 }
