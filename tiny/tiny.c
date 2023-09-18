@@ -10,15 +10,68 @@
 
 #include "csapp.h"
 
+typedef enum {
+  GET,
+  HEAD,
+  POST,
+  PUT,
+  DELETE,
+  CONNECT,
+  OPTIONS,
+  TRACE,
+  PATCH,
+  UNKNOWN
+} method_t;
+
+/**TODO - django-like urlpattern structure
+/// @brief data parsed from rio object
+typedef struct {
+  const char *path; // full path described in request header, arguments include
+  method_t method; // request method
+
+} req_t;
+*/
+
+/**
+ * SECTION - Function Declarations
+ */
+
 void doit(int fd);
 void read_requesthdrs(rio_t *rp);
 int parse_uri(char *uri, char *filename, char *cgiargs);
 void serve_static(int fd, char *filename, int filesize);
 void serve_static_malloc(int fd, char *filename, int filesize);
+void serve_static_head(int fd, char *filename, int filesize);
 void get_filetype(char *filename, char *filetype);
 void serve_dynamic(int fd, char *filename, char *cgiargs);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
+
+/// @brief get method from request header line
+/// @return method_t, an enum type
+inline static method_t __get_method(char *header, size_t len);
+
+/**TODO - django-like view structure
+/// @brief path "/" that can confirm GET, HEAD method
+/// @param rio_p includes request header
+static void __home(rio_t *rio_p);
+
+/// @brief path "cgi-bin/adder?<int:param1>&<int:param2>"
+/// @param rio_p includes request header
+static void __adder(rio_t *rio_p);
+*/
+
+/// @brief function for GET request
+/// @param rio_p allocated by caller robust io object
+static void __on_get(rio_t *rio_p);
+
+/// @brief function for HEAD request
+/// @param rio_p allocated by caller robust io object
+static void __on_head(rio_t *rio_p);
+
+/**
+ * !SECTION - Function Declarations
+ */
 
 int main(int argc, char **argv) {
   int listenfd, connfd;
@@ -45,12 +98,15 @@ int main(int argc, char **argv) {
   }
 }
 
+/// - cover path {'/', '/cgi-bin/adder?<int:param1>&<int:param2>/'},
+/// - cover method `GET`, `HEAD`
 void doit(int fd) {
   int is_static;
   struct stat sbuf;
   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
   char filename[MAXLINE], cgiargs[MAXLINE];
   rio_t rio;
+  method_t req_method;
 
   // Read request line and headers
   Rio_readinitb(&rio, fd);
@@ -58,7 +114,9 @@ void doit(int fd) {
   printf("Request headers: \n");
   printf("%s", buf);
   sscanf(buf, "%s %s %s", method, uri, version);
-  if (strcasecmp(method, "GET")) {
+
+  if ((req_method = __get_method(method, strlen(method) + 1)) ==
+      (method_t)UNKNOWN) {
     clienterror(fd, method, "501", "Not Implemented",
                 "Tiny does not implement this method");
     return;
@@ -81,8 +139,13 @@ void doit(int fd) {
                   "Tiny couldn't read the file");
       return;
     }
-    // serve_static(fd, filename, sbuf.st_size);
-    serve_static_malloc(fd, filename, sbuf.st_size);
+
+    if (req_method == (method_t)GET) {
+      // serve_static(fd, filename, sbuf.st_size);
+      serve_static_malloc(fd, filename, sbuf.st_size);
+    } else if (req_method == (method_t)HEAD) {
+      serve_static_head(fd, filename, sbuf.st_size);
+    }
   } else {
     // Serve dynamic content
     if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
@@ -196,6 +259,29 @@ void serve_static_malloc(int fd, char *filename, int filesize) {
   free(srcp);
 }
 
+/// @brief response header against HEAD request
+void serve_static_head(int fd, char *filename, int filesize) {
+  int srcfd;
+  char *srcp, filetype[MAXLINE], buf[MAXBUF];
+
+  // Send response headers to client
+  get_filetype(filename, filetype);
+  sprintf(buf, "HTTP/1.0 200 OK\r\n");
+  sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
+  sprintf(buf, "%sConnection: close\r\n", buf);
+  sprintf(buf, "%sContent-Length: %d\r\n", buf, filesize);
+  sprintf(buf, "%sContent-Type: %s\r\n\r\n", buf, filetype);
+
+  // send to client response header
+  Rio_writen(fd, buf, strlen(buf));
+
+  // just for me
+  printf("Response headers: \n");
+  printf("%s", buf);
+
+  // there are no body in this response! end function
+}
+
 /// @brief Derive file type from filename
 void get_filetype(char *filename, char *filetype_out) {
   if (strstr(filename, ".html"))
@@ -255,4 +341,28 @@ void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
   sprintf(buf, "Content-Length: %d\r\n\r\n", (int)strlen(body));
   Rio_writen(fd, buf, strlen(buf));
   Rio_writen(fd, body, strlen(body));
+}
+
+inline method_t __get_method(char *header, size_t len) {
+  // read first bytes and check
+  if (strncmp(header, "GET", 3) == 0) {
+    return GET;
+  } else if (strncmp(header, "HEAD", 4) == 0) {
+    return HEAD;
+  } else if (strncmp(header, "POST", 4) == 0) {
+    return POST;
+  } else if (strncmp(header, "PUT", 3) == 0) {
+    return PUT;
+  } else if (strncmp(header, "DELETE", 6) == 0) {
+    return DELETE;
+  } else if (strncmp(header, "CONNECT", 7) == 0) {
+    return CONNECT;
+  } else if (strncmp(header, "OPTIONS", 7) == 0) {
+    return OPTIONS;
+  } else if (strncmp(header, "TRACE", 5) == 0) {
+    return TRACE;
+  } else if (strncmp(header, "PATCH", 5) == 0) {
+    return PATCH;
+  }
+  return UNKNOWN;
 }
