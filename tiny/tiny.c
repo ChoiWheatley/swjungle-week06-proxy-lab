@@ -14,6 +14,7 @@ void doit(int fd);
 void read_requesthdrs(rio_t *rp);
 int parse_uri(char *uri, char *filename, char *cgiargs);
 void serve_static(int fd, char *filename, int filesize);
+void serve_static_malloc(int fd, char *filename, int filesize);
 void get_filetype(char *filename, char *filetype);
 void serve_dynamic(int fd, char *filename, char *cgiargs);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
@@ -80,7 +81,8 @@ void doit(int fd) {
                   "Tiny couldn't read the file");
       return;
     }
-    serve_static(fd, filename, sbuf.st_size);
+    // serve_static(fd, filename, sbuf.st_size);
+    serve_static_malloc(fd, filename, sbuf.st_size);
   } else {
     // Serve dynamic content
     if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
@@ -160,6 +162,38 @@ void serve_static(int fd, char *filename, int filesize) {
   Close(srcfd);
   Rio_writen(fd, srcp, filesize);
   Munmap(srcp, filesize);
+}
+
+void serve_static_malloc(int fd, char *filename, int filesize) {
+  int srcfd;
+  char *srcp, filetype[MAXLINE], buf[MAXBUF];
+
+  // Send response headers to client
+  get_filetype(filename, filetype);
+  sprintf(buf, "HTTP/1.0 200 OK\r\n");
+  sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
+  sprintf(buf, "%sConnection: close\r\n", buf);
+  sprintf(buf, "%sContent-Length: %d\r\n", buf, filesize);
+  sprintf(buf, "%sContent-Type: %s\r\n\r\n", buf, filetype);
+
+  // send to client response header
+  Rio_writen(fd, buf, strlen(buf));
+
+  // just for me
+  printf("Response headers: \n");
+  printf("%s", buf);
+
+  // send to client response body
+  srcfd = Open(filename, O_RDONLY, 0);
+
+  // do map with manually allocated space
+  srcp = (char *)Malloc(filesize);
+  Read(srcfd, (void *)srcp, (size_t)filesize);
+  Rio_writen(fd, srcp, filesize);
+
+  // free unused resources
+  Close(srcfd);
+  free(srcp);
 }
 
 /// @brief Derive file type from filename
