@@ -74,6 +74,9 @@ static void test_parse_uri() {
   static const char sample[] =
       "http://choiwheatley.github.io:3000/proxylab/"
       "#client-and-server-socket-programming",
+                    false_sample[] =
+                        "https://choiwheatley.github.io:3000/proxylab/"
+                        "#client-and-server-socket-programming",
                     host_answer[] = "choiwheatley.github.io:3000",
                     path_answer[] =
                         "/proxylab/"
@@ -82,6 +85,10 @@ static void test_parse_uri() {
 
   memset(host_result, 0, MAXLINE);
   memset(path_result, 0, MAXLINE);
+
+  // check invalid url
+  assert(parse_uri(false_sample, host_result, MAXLINE, path_result, MAXLINE) ==
+         0);
 
   assert(parse_uri(sample, host_result, MAXLINE, path_result, MAXLINE));
 

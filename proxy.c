@@ -208,13 +208,14 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
 
 int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
               size_t pathlen) {
-  char tmpbuf[MAXLINE];
+  char tmpbuf[MAXLINE] = {0};
 
   // use host as temporary buffer
   splitstr(uri, host, hostlen, tmpbuf, MAXLINE, "://", 3);
 
   // we only accept http protocol, not https, nor ftp, etc.
-  if (strncasecmp(host, "http", 4) != 0) {
+  if (strcasecmp(host, "http") != 0) {
+    memset(host, 0, hostlen);
     return 0;
   }
 
