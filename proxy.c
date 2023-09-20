@@ -57,13 +57,13 @@ int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
 
-/// @brief split into two parts specified with delemeter
+/// @brief split into two parts specified with delimeter
 /// @param line [in]
 /// @param left [out]
 /// @param right [out]
-/// @return 1 if success, 0 if failure, no delemeter found
+/// @return 1 if success, 0 if failure, no delimeter found
 int split(const char *line, char *left, size_t leftlen, char *right,
-          size_t rightlen, const char delem);
+          size_t rightlen, const char delim);
 
 /// @brief get method from request header line
 /// @return method_t, an enum type
@@ -132,20 +132,20 @@ void doit(int fd) {
   read_requesthdrs(&rio, hostval, MAXLINE);
 }
 
-/// @brief split into two parts specified with delemeter
+/// @brief split into two parts specified with delimeter
 /// @param line [in]
 /// @param left [out]
 /// @param right [out]
-/// @return 1 if success, 0 if failure, no delemeter found
+/// @return 1 if success, 0 if failure, no delimeter found
 int split(const char *line, char *left, size_t leftlen, char *right,
-          size_t rightlen, const char delem) {
-  char *pos = strchr(line, (int)delem);
+          size_t rightlen, const char delim) {
+  char *pos = strchr(line, (int)delim);
   if (pos == NULL) {
     return 0;
   }
 
   // do copy left
-  for (const char *itr = line; (itr - line) < leftlen && *itr != delem; ++itr) {
+  for (const char *itr = line; (itr - line) < leftlen && *itr != delim; ++itr) {
     size_t idx = itr - line;
     if (isspace(*itr)) continue;
     left[idx] = *itr;
