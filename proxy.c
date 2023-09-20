@@ -128,15 +128,16 @@ int main(int argc, char **argv) {
 
 void doit(int serve_fd) {
   int client_fd;
-  rio_t rio_client, rio_server;
+  rio_t rio_c2p;  // client to proxy
+  rio_t rio_s2p;  // server to proxy
   char buf[MAXLINE], method_str[MAXLINE], uri_str[MAXLINE],
       version_str[MAXLINE], hostval[MAXLINE], path_str[MAXLINE],
       req_port[MAXLINE];
   method_t method;
 
   // read request headers
-  Rio_readinitb(&rio_client, serve_fd);
-  Rio_readlineb(&rio_client, buf, MAXLINE);
+  Rio_readinitb(&rio_c2p, serve_fd);
+  Rio_readlineb(&rio_c2p, buf, MAXLINE);
   printf("[*] Request headers: \n");
   printf("%s", buf);
   sscanf(buf, "%s %s %s", method_str, uri_str, version_str);
@@ -152,7 +153,7 @@ void doit(int serve_fd) {
   parse_uri((const char *)uri_str, hostval, MAXLINE, path_str, MAXLINE);
 
   // NOTE - host may be overrided by HOST attribute!!
-  read_requesthdrs(&rio_client, hostval, MAXLINE);
+  read_requesthdrs(&rio_c2p, hostval, MAXLINE);
 
   char host_without_port[MAXLINE] = {0};
   if (split(hostval, host_without_port, MAXLINE, req_port, MAXLINE, ':') == 0) {
@@ -211,16 +212,17 @@ void doit(int serve_fd) {
 
   // receive response
   memset(buf, 0, sizeof(buf));
+  Rio_readinitb(&rio_s2p, client_fd);
   printf("[*] response headers:\n");
 
-  while (Rio_readlineb(&rio_server, buf, MAXLINE) > 0 &&
+  while (Rio_readlineb(&rio_s2p, buf, MAXLINE) > 0 &&
          strncmp(buf, "\r\n", 2) != 0) {
     // forward headers
     printf("%s", buf);
     Rio_writen(client_fd, buf, MAXLINE);
   }
 
-  while (Rio_readlineb(&rio_server, buf, MAXLINE) > 0) {
+  while (Rio_readlineb(&rio_s2p, buf, MAXLINE) > 0) {
     // forward body to client
     Rio_writen(client_fd, buf, MAXLINE);
   }
