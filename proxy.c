@@ -151,10 +151,7 @@ int split(const char *line, char *left, size_t leftlen, char *right,
 void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
   char buf[MAXLINE], key[MAXLINE], value[MAXLINE];
 
-  Rio_readlineb(rp, buf, MAXLINE);
-
-  while (strcmp(buf, "\r\n")) {
-    Rio_readlineb(rp, buf, MAXLINE);
+  while (Rio_readlineb(rp, buf, MAXLINE) > 0) {
     printf("%s", buf);
 
     // if header HOST found, copy value into `host`

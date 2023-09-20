@@ -7,6 +7,7 @@
 CC = gcc
 CFLAGS = -g -Wall -O0
 LDFLAGS = -lpthread
+.PHONY: test clean handin
 
 all: proxy echoclient echoserveri dd2hex hex2dd
 
