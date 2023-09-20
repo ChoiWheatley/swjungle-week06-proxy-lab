@@ -3,6 +3,10 @@
 
 #include "csapp.h"
 
+#define PRINT_S(x) printf("%s: \"%s\"\n", (#x), (char *)(x))
+
+char *trimwhitespace(char *str);
+
 extern void read_requesthdrs(rio_t *rp, char *host, size_t hostlen);
 static void test_read_requesthdrs() {
   rio_t rp;
@@ -40,13 +44,19 @@ static void test_split() {
       "image/webp, */*;q=0.8\r\n\r\n",
              key_answer[] = "Accept",
              value_answer[] =
-                 " text/html, application/xhtml+xml, application/xml";
+                 "text/html, application/xhtml+xml, application/xml;q=0.9, "
+                 "image/webp, */*;q=0.8";
   char key_result[MAXLINE], value_result[MAXLINE];
 
   split(sample, key_result, MAXLINE, value_result, MAXLINE, ':');
 
+  PRINT_S(key_result);
   assert(strcmp(key_answer, key_result) == 0);
-  assert(strcmp(value_answer, value_result) == 0);
+  PRINT_S(trimwhitespace(value_result));
+  assert(strcmp(value_answer, trimwhitespace(value_result)) == 0);
 }
 
-int main(void) { test_split(); }
+int main(void) {
+  test_split();
+  printf("OK\n");
+}
