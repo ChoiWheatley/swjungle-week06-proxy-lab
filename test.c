@@ -72,7 +72,7 @@ extern int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
 static void test_parse_uri() {
   TEST_IN
   static const char sample[] =
-      "https://choiwheatley.github.io:3000/proxylab/"
+      "http://choiwheatley.github.io:3000/proxylab/"
       "#client-and-server-socket-programming",
                     host_answer[] = "choiwheatley.github.io:3000",
                     path_answer[] =

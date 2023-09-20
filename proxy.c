@@ -179,14 +179,14 @@ int splitstr(const char *line, char *left, size_t leftlen, char *right,
   }
 
   // do copy left
-  for (const char *itr = line; (itr - line) < leftlen; ++itr) {
+  for (const char *itr = line; itr != pos; ++itr) {
     size_t idx = itr - line;
     if (isspace(*itr)) continue;
     left[idx] = *itr;
   }
 
   // do copy right
-  strncpy(right, pos + delimlen + 1, rightlen);
+  strncpy(right, pos + delimlen, rightlen);
   return 1;
 }
 
@@ -208,19 +208,18 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
 
 int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
               size_t pathlen) {
-  const char *uri_start = uri;
+  char tmpbuf[MAXLINE];
 
-  for (size_t i = 0; i < g_uri_prefix_len; ++i) {
-    // check uri contains `http://` or `https://` prefix to locate the first
-    // position of host
-    const char *prefix = g_uri_prefixes[i];
+  // use host as temporary buffer
+  splitstr(uri, host, hostlen, tmpbuf, MAXLINE, "://", 3);
 
-    if (strncmp(uri, prefix, strlen(prefix))) {
-      uri_start = uri + strlen(prefix);
-    }
+  // we only accept http protocol, not https, nor ftp, etc.
+  if (strncasecmp(host, "http", 4) != 0) {
+    return 0;
   }
+
   path[0] = '/';  // path must starts with '/'
-  return split(uri_start + 1, host, MAXLINE, path + 1, MAXLINE, '/');
+  return split(tmpbuf, host, MAXLINE, path + 1, MAXLINE, '/');
 }
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
