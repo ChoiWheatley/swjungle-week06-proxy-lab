@@ -23,11 +23,15 @@ typedef enum {
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 
 /* You won't lose style points for including this long line in your code */
-static const char *user_agent_hdr =
+static const char *g_user_agent_hdr =
     "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 "
     "Firefox/10.0.3\r\n";
+static const char *g_conn_hdr = "Connection: close";
+static const char *g_proxy_conn_hdr = "Proxy-Connection: close";
+static const char *g_version_hdr = "HTTP/1.0";
 static const char g_uri_prefixes[][15] = {"http://", "https://"};
 static const char g_uri_prefix_len = 2;
+static char *g_listen_port = NULL;
 
 /**SECTION - Function Declarations*/
 /***/
@@ -103,7 +107,8 @@ int main(int argc, char **argv) {
   }
 
   // automatically call socket(2), bind(2), listen(2)
-  listenfd = Open_listenfd(argv[1]);
+  g_listen_port = argv[1];
+  listenfd = Open_listenfd(g_listen_port);
 
   while (1) {
     clientlen = sizeof(clientaddr);
@@ -120,22 +125,23 @@ int main(int argc, char **argv) {
 }
 #endif  // LIB
 
-void doit(int fd) {
-  rio_t rio;
+void doit(int serve_fd) {
+  int client_fd;
+  rio_t rio_client, rio_server;
   char buf[MAXLINE], method_str[MAXLINE], uri_str[MAXLINE],
       version_str[MAXLINE], hostval[MAXLINE], path_str[MAXLINE];
   method_t method;
 
   // read request headers
-  Rio_readinitb(&rio, fd);
-  Rio_readlineb(&rio, buf, MAXLINE);
+  Rio_readinitb(&rio_client, serve_fd);
+  Rio_readlineb(&rio_client, buf, MAXLINE);
   printf("[*] Request headers: \n");
   printf("%s", buf);
-  sscanf("%s %s %s", method_str, uri_str, version_str);
+  sscanf(buf, "%s %s %s", method_str, uri_str, version_str);
 
   if ((method = __get_method(method_str, strlen(method_str) + 1)) ==
       (method_t)UNKNOWN) {
-    clienterror(fd, method_str, "501", "Not Implemented",
+    clienterror(serve_fd, method_str, "501", "Not Implemented",
                 "Tiny does not implement this method");
     return;
   }
@@ -144,7 +150,69 @@ void doit(int fd) {
   parse_uri((const char *)uri_str, hostval, MAXLINE, path_str, MAXLINE);
 
   // NOTE - host may be overrided by HOST attribute!!
-  read_requesthdrs(&rio, hostval, MAXLINE);
+  read_requesthdrs(&rio_client, hostval, MAXLINE);
+
+  // TODO - change it to `open_clientfd`
+
+  // connect to host server as a client
+  struct addrinfo hints, *serv_addr, *itr = NULL;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_NUMERICSERV;  // numeric port argument
+  hints.ai_flags |= AI_ADDRCONFIG;  // recommended for connections
+
+  {
+    Getaddrinfo(hostval, g_listen_port, &hints, &serv_addr);
+
+    for (itr = serv_addr; itr; itr = itr->ai_next) {
+      // iterate over server address list
+
+      // get socket for server
+      client_fd = socket(itr->ai_family, itr->ai_socktype, itr->ai_protocol);
+      if (client_fd < 0) continue;  // failed to open socket, try next one
+
+      // DO connect to the server
+      if (connect(client_fd, itr->ai_addr, itr->ai_addrlen) == 0)
+        break;  // connect successed
+
+      // connect failed, try another address
+      Close(client_fd);
+    }
+
+    freeaddrinfo(serv_addr);
+  }
+
+  if (itr == NULL) {
+    app_error("all connects failed ☠️");
+  }
+
+  // send request to host server
+  char req_buf[MAXBUF] = {0};
+  sprintf(req_buf, "%s %s %s\r\n", method_str, hostval, g_version_hdr);
+  sprintf(req_buf, "%sHost: %s\r\n", req_buf, hostval);
+  sprintf(req_buf, "%s%s\r\n", req_buf, g_user_agent_hdr);
+  sprintf(req_buf, "%s%s\r\n", req_buf, g_conn_hdr);
+  sprintf(req_buf, "%s%s\r\n", req_buf, g_proxy_conn_hdr);
+  sprintf(req_buf, "%s\r\n", req_buf);
+
+  Rio_writen(client_fd, req_buf, MAXLINE);
+
+  // receive response
+  memset(buf, 0, sizeof(buf));
+  printf("[*] response headers:\n");
+
+  while (Rio_readlineb(&rio_server, buf, MAXLINE) > 0 &&
+         strncmp(buf, "\r\n", 2) != 0) {
+    // forward headers
+    printf("%s", buf);
+    Rio_writen(client_fd, buf, MAXLINE);
+  }
+
+  while (Rio_readlineb(&rio_server, buf, MAXLINE) > 0) {
+    // forward body to client
+    Rio_writen(client_fd, buf, MAXLINE);
+  }
 }
 
 /// @brief split into two parts specified with delimeter
