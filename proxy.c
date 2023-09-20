@@ -26,6 +26,8 @@ typedef enum {
 static const char *user_agent_hdr =
     "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 "
     "Firefox/10.0.3\r\n";
+static const char g_uri_prefixes[][15] = {"http://", "https://"};
+static const char g_uri_prefix_len = 2;
 
 /**SECTION - Function Declarations*/
 /***/
@@ -50,7 +52,7 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen);
 /// @param path [out] caller-initialize buffer that saves except host section
 /// from full URI
 /// @param pathlen length of `path`
-/// @return idk
+/// @return 1 if uri is valid, 0 if uri is invalid
 int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
               size_t pathlen);
 
@@ -64,6 +66,15 @@ void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
 /// @return 1 if success, 0 if failure, no delimeter found
 int split(const char *line, char *left, size_t leftlen, char *right,
           size_t rightlen, const char delim);
+
+/// @brief split into two parts specified wit delimeter
+/// @param line [in]
+/// @param left [out]
+/// @param right [out]
+/// @param delim different with `split`, it takes string, not character
+/// @return 1 if success, 0 if failure, no delimeter found
+int splitstr(const char *line, char *left, size_t leftlen, char *right,
+             size_t rightlen, const char *delim, size_t delimlen);
 
 /// @brief get method from request header line
 /// @return method_t, an enum type
@@ -112,7 +123,7 @@ int main(int argc, char **argv) {
 void doit(int fd) {
   rio_t rio;
   char buf[MAXLINE], method_str[MAXLINE], uri_str[MAXLINE],
-      version_str[MAXLINE], hostval[MAXLINE];
+      version_str[MAXLINE], hostval[MAXLINE], path_str[MAXLINE];
   method_t method;
 
   // read request headers
@@ -129,6 +140,10 @@ void doit(int fd) {
     return;
   }
 
+  // parse uri into host & path from client request
+  parse_uri((const char *)uri_str, hostval, MAXLINE, path_str, MAXLINE);
+
+  // NOTE - host may be overrided by HOST attribute!!
   read_requesthdrs(&rio, hostval, MAXLINE);
 }
 
@@ -156,6 +171,25 @@ int split(const char *line, char *left, size_t leftlen, char *right,
   return 1;
 }
 
+int splitstr(const char *line, char *left, size_t leftlen, char *right,
+             size_t rightlen, const char *delim, size_t delimlen) {
+  char *pos = strstr(line, delim);
+  if (pos == NULL) {
+    return 0;
+  }
+
+  // do copy left
+  for (const char *itr = line; (itr - line) < leftlen; ++itr) {
+    size_t idx = itr - line;
+    if (isspace(*itr)) continue;
+    left[idx] = *itr;
+  }
+
+  // do copy right
+  strncpy(right, pos + delimlen + 1, rightlen);
+  return 1;
+}
+
 void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
   char buf[MAXLINE], key[MAXLINE], value[MAXLINE];
 
@@ -173,7 +207,21 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
 }
 
 int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
-              size_t pathlen) {}
+              size_t pathlen) {
+  const char *uri_start = uri;
+
+  for (size_t i = 0; i < g_uri_prefix_len; ++i) {
+    // check uri contains `http://` or `https://` prefix to locate the first
+    // position of host
+    const char *prefix = g_uri_prefixes[i];
+
+    if (strncmp(uri, prefix, strlen(prefix))) {
+      uri_start = uri + strlen(prefix);
+    }
+  }
+  path[0] = '/';  // path must starts with '/'
+  return split(uri_start + 1, host, MAXLINE, path + 1, MAXLINE, '/');
+}
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg) {

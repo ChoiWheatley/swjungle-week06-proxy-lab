@@ -67,9 +67,35 @@ static void test_split() {
   TEST_OUT
 }
 
+extern int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
+                     size_t pathlen);
+static void test_parse_uri() {
+  TEST_IN
+  static const char sample[] =
+      "https://choiwheatley.github.io:3000/proxylab/"
+      "#client-and-server-socket-programming",
+                    host_answer[] = "choiwheatley.github.io:3000",
+                    path_answer[] =
+                        "/proxylab/"
+                        "#client-and-server-socket-programming";
+  char host_result[MAXLINE], path_result[MAXLINE];
+
+  memset(host_result, 0, MAXLINE);
+  memset(path_result, 0, MAXLINE);
+
+  assert(parse_uri(sample, host_result, MAXLINE, path_result, MAXLINE));
+
+  PRINT_S(host_result);
+  assert(strcmp(host_answer, host_result) == 0);
+  PRINT_S(path_result);
+  assert(strcmp(path_answer, path_result) == 0);
+  TEST_OUT
+}
+
 int main(void) {
   test_split();
   test_rio_readlineb();
   test_read_requesthdrs();
+  test_parse_uri();
   printf("OK\n");
 }
