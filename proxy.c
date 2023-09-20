@@ -25,12 +25,13 @@ typedef enum {
 /* You won't lose style points for including this long line in your code */
 static const char *g_user_agent_hdr =
     "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 "
-    "Firefox/10.0.3\r\n";
+    "Firefox/10.0.3";
 static const char *g_conn_hdr = "Connection: close";
 static const char *g_proxy_conn_hdr = "Proxy-Connection: close";
 static const char *g_version_hdr = "HTTP/1.0";
 static const char g_uri_prefixes[][15] = {"http://", "https://"};
 static const char g_uri_prefix_len = 2;
+static const char *g_forward_port = "80";
 static char *g_listen_port = NULL;
 
 /**SECTION - Function Declarations*/
@@ -129,7 +130,8 @@ void doit(int serve_fd) {
   int client_fd;
   rio_t rio_client, rio_server;
   char buf[MAXLINE], method_str[MAXLINE], uri_str[MAXLINE],
-      version_str[MAXLINE], hostval[MAXLINE], path_str[MAXLINE];
+      version_str[MAXLINE], hostval[MAXLINE], path_str[MAXLINE],
+      req_port[MAXLINE];
   method_t method;
 
   // read request headers
@@ -152,6 +154,13 @@ void doit(int serve_fd) {
   // NOTE - host may be overrided by HOST attribute!!
   read_requesthdrs(&rio_client, hostval, MAXLINE);
 
+  char host_without_port[MAXLINE] = {0};
+  if (split(hostval, host_without_port, MAXLINE, req_port, MAXLINE, ':') == 0) {
+    // set to default host and port
+    strcpy(host_without_port, hostval);
+    strcpy(req_port, g_forward_port);
+  }
+
   // TODO - change it to `open_clientfd`
 
   // connect to host server as a client
@@ -163,7 +172,7 @@ void doit(int serve_fd) {
   hints.ai_flags |= AI_ADDRCONFIG;  // recommended for connections
 
   {
-    Getaddrinfo(hostval, g_listen_port, &hints, &serv_addr);
+    Getaddrinfo(host_without_port, req_port, &hints, &serv_addr);
 
     for (itr = serv_addr; itr; itr = itr->ai_next) {
       // iterate over server address list
@@ -195,6 +204,8 @@ void doit(int serve_fd) {
   sprintf(req_buf, "%s%s\r\n", req_buf, g_conn_hdr);
   sprintf(req_buf, "%s%s\r\n", req_buf, g_proxy_conn_hdr);
   sprintf(req_buf, "%s\r\n", req_buf);
+
+  printf("[*] forwarded headers:\n%s\n", req_buf);
 
   Rio_writen(client_fd, req_buf, MAXLINE);
 
