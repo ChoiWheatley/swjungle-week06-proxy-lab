@@ -68,6 +68,14 @@ int split(const char *line, char *left, size_t leftlen, char *right,
 /// @brief get method from request header line
 /// @return method_t, an enum type
 inline static method_t __get_method(char *header, size_t len);
+
+/// @brief This function returns a pointer to a substring of the original
+/// string. If the given string was allocated dynamically, the caller must not
+/// overwrite that pointer with the returned value, since the original pointer
+/// must be deallocated using the same allocator with which it was allocated.
+/// The return value must NOT be deallocated using free() etc.
+/// @note https://stackoverflow.com/a/122721/21369350
+char *trimwhitespace(char *str);
 /***/
 /**!SECTION - Function Declarations*/
 
@@ -151,16 +159,15 @@ int split(const char *line, char *left, size_t leftlen, char *right,
 void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
   char buf[MAXLINE], key[MAXLINE], value[MAXLINE];
 
-  while (Rio_readlineb(rp, buf, MAXLINE) > 0) {
+  while (Rio_readlineb(rp, buf, MAXLINE) > 0 && strcmp(buf, "\r\n") != 0) {
     printf("%s", buf);
 
-    // if header HOST found, copy value into `host`
-    if (strncmp(buf, "HOST", 4) == 0) {
-      // string copy until nextline
-      for (size_t i = 0; i < hostlen && buf[i + 4] != '\r'; ++i) {
-        if (isspace(buf[i + 4])) continue;
-        host[i] = buf[i + 4];
-      }
+    split((const char *)buf, key, MAXLINE, value, MAXLINE, ':');
+
+    if (strncasecmp(key, "HOST", 4) == 0) {
+      // if header HOST found, copy value into `host`
+
+      strncpy(host, trimwhitespace(value), MIN(hostlen, MAXLINE));
     }
   }
 }
@@ -217,12 +224,6 @@ inline method_t __get_method(char *header, size_t len) {
   return UNKNOWN;
 }
 
-/// @brief This function returns a pointer to a substring of the original
-/// string. If the given string was allocated dynamically, the caller must not
-/// overwrite that pointer with the returned value, since the original pointer
-/// must be deallocated using the same allocator with which it was allocated.
-/// The return value must NOT be deallocated using free() etc.
-/// @note https://stackoverflow.com/a/122721/21369350
 char *trimwhitespace(char *str) {
   char *end;
 

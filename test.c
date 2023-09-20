@@ -7,7 +7,7 @@
 #define TEST_IN printf("[*] begin test (%s)...\n", __func__);
 #define TEST_OUT printf("[*] end test (%s)...\n", __func__);
 
-char *trimwhitespace(char *str);
+extern char *trimwhitespace(char *str);
 
 extern void read_requesthdrs(rio_t *rp, char *host, size_t hostlen);
 static void test_read_requesthdrs() {
@@ -21,6 +21,8 @@ static void test_read_requesthdrs() {
   rio_readinitb(&rp, stub_hdr_fd);
   read_requesthdrs(&rp, host_result, MAXLINE);
 
+  PRINT_S(host_result);
+
   assert(strcmp(host_answer, host_result) == 0);
   TEST_OUT
 }
@@ -28,14 +30,15 @@ static void test_read_requesthdrs() {
 static void test_rio_readlineb() {
   TEST_IN
   rio_t rp;
-  int stub_hdr_fd, threshold, cnt = 0;
+  int stub_hdr_fd, threshold = 30, cnt = 0;
   char buf[MAXLINE];
 
   stub_hdr_fd = open("stub_header.txt", O_RDONLY);
 
   rio_readinitb(&rp, stub_hdr_fd);
 
-  while (rio_readlineb(&rp, buf, MAXLINE) > 0 && cnt++ < threshold) {
+  while (Rio_readlineb(&rp, buf, MAXLINE) > 0 && strncmp(buf, "\r\n", 2) != 0 &&
+         cnt++ < threshold) {
     printf("%s", buf);
   }
   assert(cnt < threshold);
@@ -46,7 +49,6 @@ extern int split(const char *line, char *left, size_t leftlen, char *right,
                  size_t rightlen, const char delem);
 static void test_split() {
   TEST_IN
-  rio_t rp;
   const char sample[] =
       "Accept: text/html, application/xhtml+xml, application/xml;q=0.9, "
       "image/webp, */*;q=0.8\r\n\r\n",
@@ -68,5 +70,6 @@ static void test_split() {
 int main(void) {
   test_split();
   test_rio_readlineb();
+  test_read_requesthdrs();
   printf("OK\n");
 }
