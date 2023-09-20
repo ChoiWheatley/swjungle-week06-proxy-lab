@@ -1,0 +1,15 @@
+{
+    "configurations": [
+        {
+            "name": "tiny",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPath": "/usr/bin/gcc-11",
+            "defines": [
+                "__linux__",
+                "__x86_64__",
+                "_GNU_SOURCE"
+            ]
+        }
+    ],
+    "version": 4
+}
