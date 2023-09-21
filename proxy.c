@@ -29,9 +29,6 @@ static const char *g_user_agent_hdr =
 static const char *g_conn_hdr = "Connection: close";
 static const char *g_proxy_conn_hdr = "Proxy-Connection: close";
 static const char *g_version_hdr = "HTTP/1.0";
-static const char g_uri_prefixes[][15] = {"http://", "https://"};
-static const char g_uri_prefix_len = 2;
-static const char *g_forward_port = "80";
 static char *g_listen_port = NULL;
 
 /**SECTION - Function Declarations*/
@@ -158,51 +155,21 @@ void doit(int client_fd) {
   parse_uri((const char *)uri_str, proto_str, MAXLINE, host_str, MAXLINE,
             port_str, MAXLINE, path_str, MAXLINE);
 
+  if (port_str[0] == '\0') {
+    // empty port means default port
+    strcpy(port_str, "80");
+  }
+
+  if (strcmp(proto_str, "http") != 0) {
+    clienterror(client_fd, proto_str, "501", "Not Implemented",
+                "Tiny supports only for http protocol");
+    return;
+  }
+
   // NOTE - host may be overrided by HOST attribute!!
   read_requesthdrs(&rio_c2p, host_str, MAXLINE);
 
-  char host_without_port[MAXLINE] = {0};
-  if (split(host_str, host_without_port, MAXLINE, req_port, MAXLINE, ':') ==
-      0) {
-    // set to default host and port
-    strcpy(host_without_port, host_str);
-    strcpy(req_port, g_forward_port);
-  }
-
-  // TODO - change it to `open_clientfd`
-
-  // connect to host server as a client
-  struct addrinfo hints, *serv_addr, *itr = NULL;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags = AI_NUMERICSERV;  // numeric port argument
-  hints.ai_flags |= AI_ADDRCONFIG;  // recommended for connections
-
-  {
-    Getaddrinfo(host_without_port, req_port, &hints, &serv_addr);
-
-    for (itr = serv_addr; itr; itr = itr->ai_next) {
-      // iterate over server address list
-
-      // get socket for server
-      server_fd = socket(itr->ai_family, itr->ai_socktype, itr->ai_protocol);
-      if (server_fd < 0) continue;  // failed to open socket, try next one
-
-      // DO connect to the server
-      if (connect(server_fd, itr->ai_addr, itr->ai_addrlen) == 0)
-        break;  // connect successed
-
-      // connect failed, try another address
-      Close(server_fd);
-    }
-
-    freeaddrinfo(serv_addr);
-  }
-
-  if (itr == NULL) {
-    app_error("all connects failed ☠️");
-  }
+  server_fd = Open_clientfd(host_str, port_str);
 
   // send request to host server
   char req_buf[MAXBUF] = {0};
@@ -245,16 +212,17 @@ void doit(int client_fd) {
 /// @return 1 if success, 0 if failure, no delimeter found
 int split(const char *line, char *left, size_t leftlen, char *right,
           size_t rightlen, const char delim) {
-  char *pos = strchr(line, (int)delim);
+  const char *pos = strchr(line, (int)delim);
   if (pos == NULL) {
-    return 0;
+    pos = line + strlen(line);
   }
 
   // do copy left
+
+  size_t idx = 0;
   for (const char *itr = line; (itr - line) < leftlen && *itr != delim; ++itr) {
-    size_t idx = itr - line;
     if (isspace(*itr)) continue;
-    left[idx] = *itr;
+    left[idx++] = *itr;
   }
 
   // do copy right
@@ -264,9 +232,9 @@ int split(const char *line, char *left, size_t leftlen, char *right,
 
 int splitstr(const char *line, char *left, size_t leftlen, char *right,
              size_t rightlen, const char *delim, size_t delimlen) {
-  char *pos = strstr(line, delim);
+  const char *pos = strstr(line, delim);
   if (pos == NULL) {
-    return 0;
+    pos = line + strlen(line);
   }
 
   // do copy left
@@ -292,7 +260,7 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
     if (strncasecmp(key, "HOST", 4) == 0) {
       // if header HOST found, copy value into `host`
 
-      strncpy(host, trimwhitespace(value), MIN(hostlen, MAXLINE));
+      split(value, host, hostlen, buf, MAXLINE, ':');
     }
   }
 }
@@ -300,11 +268,14 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
 void parse_uri(const char *uri, char *proto, size_t protolen, char *host,
                size_t hostlen, char *port, size_t portlen, char *path,
                size_t pathlen) {
-  char tmpbuf[MAXLINE] = {0};
-  splitstr(uri, proto, protolen, tmpbuf, MAXLINE, "://", 3);
-  split(tmpbuf, host, hostlen, tmpbuf, MAXLINE, ':');
+  char tmpbuf[MAXLINE] = {0}, tmpbuf2[MAXLINE] = {0};
   path[0] = '/';
-  split(tmpbuf, port, portlen, path + 1, pathlen - 1, '/');
+  // proto & others
+  splitstr(uri, proto, protolen, tmpbuf, MAXLINE, "://", 3);
+  // others & path[option]
+  split(tmpbuf, tmpbuf2, MAXLINE, path + 1, pathlen - 1, '/');
+  // host and port[option]
+  split(tmpbuf2, host, hostlen, port, portlen, ':');
 }
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
