@@ -232,9 +232,9 @@ int split(const char *line, char *left, size_t leftlen, char *right,
 
 int splitstr(const char *line, char *left, size_t leftlen, char *right,
              size_t rightlen, const char *delim, size_t delimlen) {
-  char *pos = strstr(line, delim);
+  const char *pos = strstr(line, delim);
   if (pos == NULL) {
-    return 0;
+    pos = line + strlen(line);
   }
 
   // do copy left
