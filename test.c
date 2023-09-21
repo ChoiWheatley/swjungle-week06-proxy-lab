@@ -13,12 +13,13 @@ extern void read_requesthdrs(rio_t *rp, char *host, size_t hostlen);
 static void test_read_requesthdrs() {
   TEST_IN
   rio_t rp;
-  char host_result[MAXLINE];
+  char host_result[MAXLINE], firstlne[MAXLINE];
   const char host_answer[MAXLINE] = "www.example.com";
   int stub_hdr_fd;
 
   stub_hdr_fd = open("stub_header.txt", O_RDONLY);
   rio_readinitb(&rp, stub_hdr_fd);
+  Rio_readlineb(&rp, firstlne, MAXLINE);
   read_requesthdrs(&rp, host_result, MAXLINE);
 
   PRINT_S(host_result);

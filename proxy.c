@@ -169,40 +169,7 @@ void doit(int client_fd) {
   // NOTE - host may be overrided by HOST attribute!!
   read_requesthdrs(&rio_c2p, host_str, MAXLINE);
 
-  // TODO - change it to `open_clientfd`
-
-  // connect to host server as a client
-  struct addrinfo hints, *serv_addr, *itr = NULL;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags = AI_NUMERICSERV;  // numeric port argument
-  hints.ai_flags |= AI_ADDRCONFIG;  // recommended for connections
-
-  {
-    Getaddrinfo(host_str, port_str, &hints, &serv_addr);
-
-    for (itr = serv_addr; itr; itr = itr->ai_next) {
-      // iterate over server address list
-
-      // get socket for server
-      server_fd = socket(itr->ai_family, itr->ai_socktype, itr->ai_protocol);
-      if (server_fd < 0) continue;  // failed to open socket, try next one
-
-      // DO connect to the server
-      if (connect(server_fd, itr->ai_addr, itr->ai_addrlen) == 0)
-        break;  // connect successed
-
-      // connect failed, try another address
-      Close(server_fd);
-    }
-
-    freeaddrinfo(serv_addr);
-  }
-
-  if (itr == NULL) {
-    app_error("all connects failed ☠️");
-  }
+  server_fd = Open_clientfd(host_str, port_str);
 
   // send request to host server
   char req_buf[MAXBUF] = {0};
@@ -245,16 +212,17 @@ void doit(int client_fd) {
 /// @return 1 if success, 0 if failure, no delimeter found
 int split(const char *line, char *left, size_t leftlen, char *right,
           size_t rightlen, const char delim) {
-  char *pos = strchr(line, (int)delim);
+  const char *pos = strchr(line, (int)delim);
   if (pos == NULL) {
-    return 0;
+    pos = line + strlen(line);
   }
 
   // do copy left
+
+  size_t idx = 0;
   for (const char *itr = line; (itr - line) < leftlen && *itr != delim; ++itr) {
-    size_t idx = itr - line;
     if (isspace(*itr)) continue;
-    left[idx] = *itr;
+    left[idx++] = *itr;
   }
 
   // do copy right
@@ -292,7 +260,7 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
     if (strncasecmp(key, "HOST", 4) == 0) {
       // if header HOST found, copy value into `host`
 
-      strncpy(host, trimwhitespace(value), MIN(hostlen, MAXLINE));
+      split(value, host, hostlen, buf, MAXLINE, ':');
     }
   }
 }
