@@ -58,8 +58,12 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen);
 /// from full URI
 /// @param pathlen length of `path`
 /// @return 1 if uri is valid, 0 if uri is invalid
-int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
-              size_t pathlen);
+
+/// @brief Proxy server assums that uri MUST include whole valid URI of
+/// endpoint.
+void parse_uri(const char *uri, char *proto, size_t protolen, char *host,
+               size_t hostlen, char *port, size_t portlen, char *path,
+               size_t pathlen);
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
@@ -131,8 +135,7 @@ void doit(int client_fd) {
   rio_t rio_c2p;  // client to proxy
   rio_t rio_s2p;  // server to proxy
   char buf[MAXLINE], method_str[MAXLINE], uri_str[MAXLINE],
-      version_str[MAXLINE], hostval[MAXLINE], path_str[MAXLINE],
-      req_port[MAXLINE];
+      version_str[MAXLINE], req_port[MAXLINE];
   method_t method;
 
   // read request headers
@@ -150,15 +153,19 @@ void doit(int client_fd) {
   }
 
   // parse uri into host & path from client request
-  parse_uri((const char *)uri_str, hostval, MAXLINE, path_str, MAXLINE);
+  char proto_str[MAXLINE], host_str[MAXLINE], port_str[MAXLINE],
+      path_str[MAXLINE];
+  parse_uri((const char *)uri_str, proto_str, MAXLINE, host_str, MAXLINE,
+            port_str, MAXLINE, path_str, MAXLINE);
 
   // NOTE - host may be overrided by HOST attribute!!
-  read_requesthdrs(&rio_c2p, hostval, MAXLINE);
+  read_requesthdrs(&rio_c2p, host_str, MAXLINE);
 
   char host_without_port[MAXLINE] = {0};
-  if (split(hostval, host_without_port, MAXLINE, req_port, MAXLINE, ':') == 0) {
+  if (split(host_str, host_without_port, MAXLINE, req_port, MAXLINE, ':') ==
+      0) {
     // set to default host and port
-    strcpy(host_without_port, hostval);
+    strcpy(host_without_port, host_str);
     strcpy(req_port, g_forward_port);
   }
 
@@ -200,7 +207,7 @@ void doit(int client_fd) {
   // send request to host server
   char req_buf[MAXBUF] = {0};
   sprintf(req_buf, "%s %s %s\r\n", method_str, path_str, g_version_hdr);
-  sprintf(req_buf, "%sHost: %s\r\n", req_buf, hostval);
+  sprintf(req_buf, "%sHost: %s\r\n", req_buf, host_str);
   sprintf(req_buf, "%s%s\r\n", req_buf, g_user_agent_hdr);
   sprintf(req_buf, "%s%s\r\n", req_buf, g_conn_hdr);
   sprintf(req_buf, "%s%s\r\n", req_buf, g_proxy_conn_hdr);
@@ -290,21 +297,14 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
   }
 }
 
-int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
-              size_t pathlen) {
+void parse_uri(const char *uri, char *proto, size_t protolen, char *host,
+               size_t hostlen, char *port, size_t portlen, char *path,
+               size_t pathlen) {
   char tmpbuf[MAXLINE] = {0};
-
-  // use host as temporary buffer
-  splitstr(uri, host, hostlen, tmpbuf, MAXLINE, "://", 3);
-
-  // we only accept http protocol, not https, nor ftp, etc.
-  if (strcasecmp(host, "http") != 0) {
-    memset(host, 0, hostlen);
-    return 0;
-  }
-
-  path[0] = '/';  // path must starts with '/'
-  return split(tmpbuf, host, MAXLINE, path + 1, MAXLINE, '/');
+  splitstr(uri, proto, protolen, tmpbuf, MAXLINE, "://", 3);
+  split(tmpbuf, host, hostlen, tmpbuf, MAXLINE, ':');
+  path[0] = '/';
+  split(tmpbuf, port, portlen, path + 1, pathlen - 1, '/');
 }
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
