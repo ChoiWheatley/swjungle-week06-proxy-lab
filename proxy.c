@@ -126,8 +126,8 @@ int main(int argc, char **argv) {
 }
 #endif  // LIB
 
-void doit(int serve_fd) {
-  int client_fd;
+void doit(int client_fd) {
+  int server_fd;  // talk with server
   rio_t rio_c2p;  // client to proxy
   rio_t rio_s2p;  // server to proxy
   char buf[MAXLINE], method_str[MAXLINE], uri_str[MAXLINE],
@@ -136,7 +136,7 @@ void doit(int serve_fd) {
   method_t method;
 
   // read request headers
-  Rio_readinitb(&rio_c2p, serve_fd);
+  Rio_readinitb(&rio_c2p, client_fd);
   Rio_readlineb(&rio_c2p, buf, MAXLINE);
   printf("[*] Request headers: \n");
   printf("%s", buf);
@@ -144,7 +144,7 @@ void doit(int serve_fd) {
 
   if ((method = __get_method(method_str, strlen(method_str) + 1)) ==
       (method_t)UNKNOWN) {
-    clienterror(serve_fd, method_str, "501", "Not Implemented",
+    clienterror(client_fd, method_str, "501", "Not Implemented",
                 "Tiny does not implement this method");
     return;
   }
@@ -179,15 +179,15 @@ void doit(int serve_fd) {
       // iterate over server address list
 
       // get socket for server
-      client_fd = socket(itr->ai_family, itr->ai_socktype, itr->ai_protocol);
-      if (client_fd < 0) continue;  // failed to open socket, try next one
+      server_fd = socket(itr->ai_family, itr->ai_socktype, itr->ai_protocol);
+      if (server_fd < 0) continue;  // failed to open socket, try next one
 
       // DO connect to the server
-      if (connect(client_fd, itr->ai_addr, itr->ai_addrlen) == 0)
+      if (connect(server_fd, itr->ai_addr, itr->ai_addrlen) == 0)
         break;  // connect successed
 
       // connect failed, try another address
-      Close(client_fd);
+      Close(server_fd);
     }
 
     freeaddrinfo(serv_addr);
@@ -208,11 +208,11 @@ void doit(int serve_fd) {
 
   printf("[*] forwarded headers:\n%s\n", req_buf);
 
-  Rio_writen(client_fd, req_buf, MAXLINE);
+  Rio_writen(server_fd, req_buf, MAXLINE);
 
   // receive response
   memset(buf, 0, sizeof(buf));
-  Rio_readinitb(&rio_s2p, client_fd);
+  Rio_readinitb(&rio_s2p, server_fd);
   printf("[*] response headers:\n");
 
   ssize_t n;
