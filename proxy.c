@@ -215,16 +215,17 @@ void doit(int serve_fd) {
   Rio_readinitb(&rio_s2p, client_fd);
   printf("[*] response headers:\n");
 
-  while (Rio_readlineb(&rio_s2p, buf, MAXLINE) > 0 &&
+  ssize_t n;
+  while ((n = Rio_readlineb(&rio_s2p, buf, MAXLINE)) > 0 &&
          strncmp(buf, "\r\n", 2) != 0) {
     // forward headers
     printf("%s", buf);
-    Rio_writen(client_fd, buf, MAXLINE);
+    Rio_writen(client_fd, buf, n);
   }
 
-  while (Rio_readlineb(&rio_s2p, buf, MAXLINE) > 0) {
+  while ((n = Rio_readlineb(&rio_s2p, buf, MAXLINE)) > 0) {
     // forward body to client
-    Rio_writen(client_fd, buf, MAXLINE);
+    Rio_writen(client_fd, buf, n);
   }
   Close(client_fd);
 }
