@@ -199,7 +199,7 @@ void doit(int serve_fd) {
 
   // send request to host server
   char req_buf[MAXBUF] = {0};
-  sprintf(req_buf, "%s %s %s\r\n", method_str, hostval, g_version_hdr);
+  sprintf(req_buf, "%s %s %s\r\n", method_str, path_str, g_version_hdr);
   sprintf(req_buf, "%sHost: %s\r\n", req_buf, hostval);
   sprintf(req_buf, "%s%s\r\n", req_buf, g_user_agent_hdr);
   sprintf(req_buf, "%s%s\r\n", req_buf, g_conn_hdr);
@@ -226,6 +226,7 @@ void doit(int serve_fd) {
     // forward body to client
     Rio_writen(client_fd, buf, MAXLINE);
   }
+  Close(client_fd);
 }
 
 /// @brief split into two parts specified with delimeter
