@@ -269,10 +269,13 @@ void parse_uri(const char *uri, char *proto, size_t protolen, char *host,
                size_t hostlen, char *port, size_t portlen, char *path,
                size_t pathlen) {
   char tmpbuf[MAXLINE] = {0}, tmpbuf2[MAXLINE] = {0};
-  splitstr(uri, proto, protolen, tmpbuf, MAXLINE, "://", 3);
-  split(tmpbuf, host, hostlen, tmpbuf2, MAXLINE, ':');
   path[0] = '/';
-  split(tmpbuf2, port, portlen, path + 1, pathlen - 1, '/');
+  // proto & others
+  splitstr(uri, proto, protolen, tmpbuf, MAXLINE, "://", 3);
+  // others & path[option]
+  split(tmpbuf, tmpbuf2, MAXLINE, path + 1, pathlen - 1, '/');
+  // host and port[option]
+  split(tmpbuf2, host, hostlen, port, portlen, ':');
 }
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
