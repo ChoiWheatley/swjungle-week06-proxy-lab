@@ -216,18 +216,19 @@ void doit(int client_fd) {
   printf("[*] response headers:\n");
 
   ssize_t n;
-  while ((n = Rio_readlineb(&rio_s2p, buf, MAXLINE)) > 0 &&
-         strncmp(buf, "\r\n", 2) != 0) {
-    // forward headers
+  // while ((n = Rio_readlineb(&rio_s2p, buf, MAXLINE)) > 0 &&
+  //        strncmp(buf, "\r\n", 2) != 0) {
+  //   // forward headers
+  //   printf("%s", buf);
+  //   Rio_writen(client_fd, buf, n);
+  // }
+
+  while ((n = Rio_readlineb(&rio_s2p, buf, MAXLINE)) > 0) {
+    // forward to client
     printf("%s", buf);
     Rio_writen(client_fd, buf, n);
   }
-
-  while ((n = Rio_readlineb(&rio_s2p, buf, MAXLINE)) > 0) {
-    // forward body to client
-    Rio_writen(client_fd, buf, n);
-  }
-  Close(client_fd);
+  Close(server_fd);
 }
 
 /// @brief split into two parts specified with delimeter
