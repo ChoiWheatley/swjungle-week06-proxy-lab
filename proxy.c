@@ -29,9 +29,6 @@ static const char *g_user_agent_hdr =
 static const char *g_conn_hdr = "Connection: close";
 static const char *g_proxy_conn_hdr = "Proxy-Connection: close";
 static const char *g_version_hdr = "HTTP/1.0";
-static const char g_uri_prefixes[][15] = {"http://", "https://"};
-static const char g_uri_prefix_len = 2;
-static const char *g_forward_port = "80";
 static char *g_listen_port = NULL;
 
 /**SECTION - Function Declarations*/
@@ -158,16 +155,19 @@ void doit(int client_fd) {
   parse_uri((const char *)uri_str, proto_str, MAXLINE, host_str, MAXLINE,
             port_str, MAXLINE, path_str, MAXLINE);
 
+  if (port_str[0] == '\0') {
+    // empty port means default port
+    strcpy(port_str, "80");
+  }
+
+  if (strcmp(proto_str, "http") != 0) {
+    clienterror(client_fd, proto_str, "501", "Not Implemented",
+                "Tiny supports only for http protocol");
+    return;
+  }
+
   // NOTE - host may be overrided by HOST attribute!!
   read_requesthdrs(&rio_c2p, host_str, MAXLINE);
-
-  char host_without_port[MAXLINE] = {0};
-  if (split(host_str, host_without_port, MAXLINE, req_port, MAXLINE, ':') ==
-      0) {
-    // set to default host and port
-    strcpy(host_without_port, host_str);
-    strcpy(req_port, g_forward_port);
-  }
 
   // TODO - change it to `open_clientfd`
 
@@ -180,7 +180,7 @@ void doit(int client_fd) {
   hints.ai_flags |= AI_ADDRCONFIG;  // recommended for connections
 
   {
-    Getaddrinfo(host_without_port, req_port, &hints, &serv_addr);
+    Getaddrinfo(host_str, port_str, &hints, &serv_addr);
 
     for (itr = serv_addr; itr; itr = itr->ai_next) {
       // iterate over server address list
@@ -300,11 +300,11 @@ void read_requesthdrs(rio_t *rp, char *host, size_t hostlen) {
 void parse_uri(const char *uri, char *proto, size_t protolen, char *host,
                size_t hostlen, char *port, size_t portlen, char *path,
                size_t pathlen) {
-  char tmpbuf[MAXLINE] = {0};
+  char tmpbuf[MAXLINE] = {0}, tmpbuf2[MAXLINE] = {0};
   splitstr(uri, proto, protolen, tmpbuf, MAXLINE, "://", 3);
-  split(tmpbuf, host, hostlen, tmpbuf, MAXLINE, ':');
+  split(tmpbuf, host, hostlen, tmpbuf2, MAXLINE, ':');
   path[0] = '/';
-  split(tmpbuf, port, portlen, path + 1, pathlen - 1, '/');
+  split(tmpbuf2, port, portlen, path + 1, pathlen - 1, '/');
 }
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
