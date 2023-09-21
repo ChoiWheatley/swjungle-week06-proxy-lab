@@ -67,35 +67,37 @@ static void test_split() {
   TEST_OUT
 }
 
-extern int parse_uri(const char *uri, char *host, size_t hostlen, char *path,
-                     size_t pathlen);
+void parse_uri(const char *uri, char *proto, size_t protolen, char *host,
+               size_t hostlen, char *port, size_t portlen, char *path,
+               size_t pathlen);
 static void test_parse_uri() {
   TEST_IN
   static const char sample[] =
-      "http://choiwheatley.github.io:3000/proxylab/"
-      "#client-and-server-socket-programming",
-                    false_sample[] =
-                        "https://choiwheatley.github.io:3000/proxylab/"
-                        "#client-and-server-socket-programming",
-                    host_answer[] = "choiwheatley.github.io:3000",
-                    path_answer[] =
-                        "/proxylab/"
-                        "#client-and-server-socket-programming";
-  char host_result[MAXLINE], path_result[MAXLINE];
+      "http://choiwheatley.github.io:3000/some/path/cgi?param1&param2",
+                    proto_answer[] = "http",
+                    host_answer[] = "choiwheatley.github.io",
+                    port_answer[] = "3000",
+                    path_answer[] = "/some/path/cgi?param1&param2";
+  char proto_result[MAXLINE], host_result[MAXLINE], port_result[MAXLINE],
+      path_result[MAXLINE];
 
+  memset(proto_result, 0, MAXLINE);
   memset(host_result, 0, MAXLINE);
+  memset(port_result, 0, MAXLINE);
   memset(path_result, 0, MAXLINE);
 
-  // check invalid url
-  assert(parse_uri(false_sample, host_result, MAXLINE, path_result, MAXLINE) ==
-         0);
+  parse_uri(sample, proto_result, MAXLINE, host_result, MAXLINE, port_result,
+            MAXLINE, path_result, MAXLINE);
 
-  assert(parse_uri(sample, host_result, MAXLINE, path_result, MAXLINE));
-
+  PRINT_S(proto_result);
+  assert(strcmp(proto_answer, proto_result) == 0);
   PRINT_S(host_result);
   assert(strcmp(host_answer, host_result) == 0);
+  PRINT_S(port_result);
+  assert(strcmp(port_answer, port_result) == 0);
   PRINT_S(path_result);
   assert(strcmp(path_answer, path_result) == 0);
+
   TEST_OUT
 }
 
